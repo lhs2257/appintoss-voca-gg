@@ -1,0 +1,43 @@
+# 약관 원본 폴더 (docs/에 복사본 있음, voca-gg-legal 레포에서 관리)
+legal/
+
+# Dependencies
+node_modules/
+
+# 환경변수 / 보안
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
+# 빌드 산출물
+dist/
+build/
+out/
+*.jsbundle
+
+# 앱인토스
+.ax/
+.expo/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# 로그
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 테스트 커버리지
+coverage/
