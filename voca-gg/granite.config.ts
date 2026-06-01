@@ -19,9 +19,9 @@ export default defineConfig({
     hermes(),
     appsInToss({
       brand: {
-        displayName: 'voca.gg',
+        displayName: '보카지지',
         primaryColor: '#3182F6',
-        icon: '', // 콘솔에서 업로드한 아이콘 URL로 교체하세요
+        icon: 'https://static.toss.im/appsintoss/6147/967041d8-327d-4bd2-9de3-eea77da3d5f0.png',
       },
       permissions: [],
     }),
