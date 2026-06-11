@@ -1,4 +1,5 @@
-import { createRoute } from '@granite-js/react-native';
+import { createRoute, useBackEvent, closeView } from '@granite-js/react-native';
+import { CommonActions } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -8,12 +9,14 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
+  Keyboard,
 } from 'react-native';
+import { useDialog } from '@toss/tds-react-native';
+import { josa } from 'es-hangul';
 import { COLORS } from '../lib/theme';
-import { validateWord, formatScore, getPointsForRound } from '../lib/gameUtils';
+import { useAudio } from '../lib/AudioContext';
+import { validateWord, validateWordAsync, formatScore, getPointsForRound } from '../lib/gameUtils';
 import {
   subscribeMatch,
   submitWord,
@@ -37,15 +40,71 @@ function GameScreen() {
   const [input, setInput] = useState('');
   const [feedback, setFeedback] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [timeLeft, setTimeLeft] = useState(TURN_TIMEOUT_MS_CONST / 1000);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // 외부 API 검증 중 상태 (로컬 DB에 없는 단어 입력 시)
+  const [isValidating, setIsValidating] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeLeftRef = useRef(TURN_TIMEOUT_MS_CONST / 1000);
   const botCancelRef = useRef<(() => void) | null>(null);
   // 게임 종료 중복 방지 (타이머 만료 + 오답 제출 레이스 컨디션)
   const isEndingRef = useRef(false);
+  // API 검증 중 타이머 정지용 ref (setInterval 클로저에서 state 직접 참조 불가)
+  const isValidatingRef = useRef(false);
   const wordFeedScrollRef = useRef<ScrollView>(null);
   const timerBarAnim = useRef(new Animated.Value(1)).current;
   const feedbackAnim = useRef(new Animated.Value(0)).current;
+
+  // match 최신값을 back 핸들러에서 참조하기 위한 ref
+  const matchRef = useRef(match);
+  matchRef.current = match;
+  // isValidating 최신값을 setInterval 클로저에서 참조하기 위한 ref
+  isValidatingRef.current = isValidating;
+
+  const backEvent = useBackEvent();
+  const { openConfirm } = useDialog();
+  const { setInGame } = useAudio();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const brandDisplayName: string = ((global as Record<string, any>).__appsInToss ?? {}).brandDisplayName ?? '보카지지';
+
+  // 게임 화면 진입 시 게임 BGM 활성화, 이탈 시 메인 BGM 복귀
+  useEffect(() => {
+    setInGame(true);
+    return () => setInGame(false);
+  }, []);
+
+  // 키보드 높이 추적 (KeyboardAvoidingView 대체)
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  // 뒤로가기: TDS ConfirmDialog (X 버튼과 동일 디자인) → 종료 시 앱 닫기
+  useEffect(() => {
+    const handleBack = async () => {
+      const confirmed = await openConfirm({
+        title: `${josa(brandDisplayName, '을/를')} 종료할까요?`,
+        leftButton: '닫기',
+        rightButton: '종료하기',
+        closeOnDimmerClick: true,
+      });
+      if (!confirmed) return;
+      const currentMatch = matchRef.current;
+      if (currentMatch && !isEndingRef.current) {
+        isEndingRef.current = true;
+        await endBotGame(matchId, currentMatch, uid);
+      }
+      closeView();
+    };
+
+    backEvent.addEventListener(handleBack);
+    return () => backEvent.removeEventListener(handleBack);
+  }, [backEvent, matchId, uid, navigation]);
 
   // 매치 구독
   useEffect(() => {
@@ -85,6 +144,8 @@ function GameScreen() {
       }).start();
 
       timerRef.current = setInterval(() => {
+        // API 검증 중에는 카운트다운 정지
+        if (isValidatingRef.current) return;
         timeLeftRef.current -= 1;
         setTimeLeft(timeLeftRef.current);
         if (timeLeftRef.current <= 0) {
@@ -130,6 +191,23 @@ function GameScreen() {
     };
   }, [match?.currentTurn, match?.status]);
 
+  // API 검증 중 프로그래스바 애니메이션 정지/재개
+  useEffect(() => {
+    if (!isMyTurn || match?.status !== 'playing') return;
+
+    if (isValidating) {
+      timerBarAnim.stopAnimation();
+    } else {
+      // 오답 판정 후 남은 시간부터 재개
+      Animated.timing(timerBarAnim, {
+        toValue: 0,
+        duration: timeLeftRef.current * 1000,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [isValidating]);
+
   // 피드백 표시 애니메이션
   const showFeedback = useCallback(
     (text: string, type: 'success' | 'error' | 'info') => {
@@ -146,22 +224,57 @@ function GameScreen() {
     [],
   );
 
-  const handleSubmit = () => {
-    if (!match || !isMyTurn || !input.trim()) return;
+  const handleSubmit = async () => {
+    if (!match || !isMyTurn || !input.trim() || isValidating) return;
 
-    const result = validateWord(input, match.condition, match.words ?? []);
-    if (!result.valid) {
-      // 오답: 피드백만 표시, 타이머는 계속 진행 (10초 만료 시 게임 종료)
-      showFeedback(result.reason!, 'error');
+    const wordToSubmit = input.trim().toLowerCase();
+
+    // 1단계: 로컬 DB 동기 검사 (빠른 경로 — 대부분의 경우 여기서 종료)
+    const localResult = validateWord(wordToSubmit, match.condition, match.words ?? []);
+    if (localResult.valid) {
+      clearInterval(timerRef.current!);
+      showFeedback(`+${getPointsForRound(match.round)}점 — ${localResult.meaning}`, 'success');
+      setInput('');
+      submitWord(matchId, match, uid, wordToSubmit, localResult.meaning!);
+      return;
+    }
+
+    // 로컬에서 "이미 사용된 단어" / "형식 오류"는 즉시 피드백 (API 불필요)
+    if (
+      localResult.reason === '이미 사용된 단어예요.' ||
+      localResult.reason?.startsWith("'") // 첫글자/끝글자 조건 오류
+    ) {
+      showFeedback(localResult.reason, 'error');
       setInput('');
       return;
     }
 
-    // 정답
-    clearInterval(timerRef.current!);
-    showFeedback(`+${getPointsForRound(match.round)}점 — ${result.meaning}`, 'success');
+    // 2단계: 로컬 DB에 없는 단어 → 외부 API로 검증
+    // "단어 확인 중..." 피드백은 isValidating 상태로 직접 렌더링 (아래 JSX 참고)
+    setIsValidating(true);
     setInput('');
-    submitWord(matchId, match, uid, input.trim().toLowerCase(), result.meaning!);
+
+    try {
+      const result = await validateWordAsync(wordToSubmit, match.condition, match.words ?? []);
+
+      // 타이머가 이미 만료된 경우 (isEndingRef) 제출 무시
+      if (isEndingRef.current) return;
+
+      if (!result.valid) {
+        showFeedback(result.reason!, 'error');
+        return;
+      }
+
+      // 정답
+      clearInterval(timerRef.current!);
+      showFeedback(`+${getPointsForRound(match.round)}점 — ${result.meaning}`, 'success');
+      submitWord(matchId, match, uid, wordToSubmit, result.meaning!);
+    } catch {
+      // 네트워크 오류 (isValidEnglishWord가 throw)
+      showFeedback('네트워크 오류가 발생했어요. 다시 시도해 주세요.', 'error');
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   const timerColor = timerBarAnim.interpolate({
@@ -182,10 +295,7 @@ function GameScreen() {
   const opponentScore = match.scores[opponentUid] ?? 0;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={[styles.container, { paddingBottom: keyboardHeight }]}>
       {/* 타이머 바 */}
       <Animated.View
         style={[
@@ -200,39 +310,41 @@ function GameScreen() {
         ]}
       />
 
-      {/* 헤더: 점수 */}
+      {/* 헤더: 라운드 뱃지만 중앙에 (점수는 단어 퍼즐 양옆으로 이동) */}
       <View style={styles.header}>
-        <View style={styles.scoreBox}>
-          <Text style={styles.scoreLabel}>나</Text>
-          <Text style={styles.scoreValue}>{formatScore(myScore)}</Text>
-        </View>
         <View style={styles.roundBadge}>
           <Text style={styles.roundText}>R{match.round}</Text>
         </View>
-        <View style={[styles.scoreBox, styles.scoreBoxRight]}>
-          <Text style={styles.scoreLabel}>{opponentUid === 'bot' ? '봇' : '상대'}</Text>
-          <Text style={styles.scoreValue}>{formatScore(opponentScore)}</Text>
-        </View>
       </View>
 
-      {/* 조건 표시 */}
+      {/* 조건 + 점수 통합 영역: [나/점수] [E→...→E] [봇/점수] */}
       <View style={styles.conditionArea}>
-        <Text style={styles.conditionLabel}>단어 조건</Text>
-        <View style={styles.conditionRow}>
-          <View style={styles.letterBox}>
-            <Text style={styles.letterText}>{match.condition.first.toUpperCase()}</Text>
+        <View style={styles.conditionWithScores}>
+          {/* 좌측: 내 점수 */}
+          <View style={styles.scoreBox}>
+            <Text style={styles.scoreLabel}>나</Text>
+            <Text style={styles.scoreValue}>{formatScore(myScore)}</Text>
           </View>
-          <Text style={styles.conditionArrow}>→</Text>
-          <Text style={styles.conditionEllipsis}>···</Text>
-          <Text style={styles.conditionArrow}>→</Text>
-          <View style={styles.letterBox}>
-            <Text style={styles.letterText}>{match.condition.last.toUpperCase()}</Text>
+
+          {/* 중앙: 글자 조건 퍼즐 */}
+          <View style={styles.conditionRow}>
+            <View style={styles.letterBox}>
+              <Text style={styles.letterText}>{match.condition.first.toUpperCase()}</Text>
+            </View>
+            <Text style={styles.conditionArrow}>→</Text>
+            <Text style={styles.conditionEllipsis}>···</Text>
+            <Text style={styles.conditionArrow}>→</Text>
+            <View style={styles.letterBox}>
+              <Text style={styles.letterText}>{match.condition.last.toUpperCase()}</Text>
+            </View>
+          </View>
+
+          {/* 우측: 봇/상대 점수 */}
+          <View style={[styles.scoreBox, styles.scoreBoxRight]}>
+            <Text style={styles.scoreLabel}>{opponentUid === 'bot' ? '봇' : '상대'}</Text>
+            <Text style={styles.scoreValue}>{formatScore(opponentScore)}</Text>
           </View>
         </View>
-        <Text style={styles.conditionSub}>
-          {match.condition.first.toUpperCase()}로 시작하고{' '}
-          {match.condition.last.toUpperCase()}로 끝나는 영어 단어
-        </Text>
       </View>
 
       {/* 단어 피드 (스크롤 가능, 키보드 위에 유지) */}
@@ -261,22 +373,25 @@ function GameScreen() {
       </ScrollView>
 
       {/* 피드백 오버레이 */}
-      {feedback && (
+      {/* isValidating 중에는 opacity 1로 고정 → 검증 완료까지 "단어 확인 중..." 지속 표시 */}
+      {(feedback || isValidating) && (
         <Animated.View
-          style={[styles.feedback, { opacity: feedbackAnim }]}
+          style={[styles.feedback, { opacity: isValidating ? 1 : feedbackAnim }]}
           pointerEvents="none"
         >
           <Text
             style={[
               styles.feedbackText,
-              feedback.type === 'success'
+              isValidating
+                ? styles.feedbackInfo
+                : feedback?.type === 'success'
                 ? styles.feedbackSuccess
-                : feedback.type === 'error'
+                : feedback?.type === 'error'
                 ? styles.feedbackError
                 : styles.feedbackInfo,
             ]}
           >
-            {feedback.text}
+            {isValidating ? '단어 확인 중...' : feedback?.text}
           </Text>
         </Animated.View>
       )}
@@ -294,20 +409,30 @@ function GameScreen() {
                 value={input}
                 onChangeText={setInput}
                 onSubmitEditing={handleSubmit}
-                placeholder={`${match.condition.first}...${match.condition.last}`}
+                placeholder={
+                  isValidating
+                    ? '확인 중...'
+                    : `${match.condition.first}...${match.condition.last}`
+                }
                 placeholderTextColor={COLORS.textDim}
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="done"
                 autoFocus
+                editable={!isValidating}
               />
               <TouchableOpacity
-                style={[styles.submitBtn, !input.trim() && styles.submitBtnDisabled]}
+                style={[
+                  styles.submitBtn,
+                  (!input.trim() || isValidating) && styles.submitBtnDisabled,
+                ]}
                 onPress={handleSubmit}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isValidating}
                 activeOpacity={0.85}
               >
-                <Text style={styles.submitBtnText}>입력</Text>
+                <Text style={styles.submitBtnText}>
+                  {isValidating ? '...' : '입력'}
+                </Text>
               </TouchableOpacity>
             </View>
           </>
@@ -319,7 +444,7 @@ function GameScreen() {
           </View>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -342,13 +467,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
+  // 헤더: 라운드 뱃지만 중앙 정렬
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 36,
-    paddingBottom: 12,
+    paddingTop: 8,  // safeAreaTop은 GameScreenContainer wrapper에서 처리
+    paddingBottom: 4,
   },
   scoreBox: {
     flex: 1,
@@ -381,10 +504,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textMuted,
   },
+  // 조건 영역: 점수와 퍼즐을 한 행에 배치
   conditionArea: {
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 12,
+  },
+  conditionWithScores: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   conditionLabel: {
     fontSize: 11,

@@ -1,6 +1,9 @@
-import { createRoute } from '@granite-js/react-native';
+import { createRoute, useBackEvent, closeView } from '@granite-js/react-native';
+import { CommonActions } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import { useDialog } from '@toss/tds-react-native';
+import { josa } from 'es-hangul';
 import { COLORS } from '../lib/theme';
 import { createBotMatchDirect } from '../lib/matchmaking';
 
@@ -15,6 +18,36 @@ function MatchingScreen() {
 
   const [elapsed, setElapsed] = useState(0);
   const cancelRef = useRef<(() => void) | null>(null);
+  const backEvent = useBackEvent();
+  const { openConfirm } = useDialog();
+
+  const brandDisplayName: string =
+    ((global as Record<string, any>).__appsInToss ?? {}).brandDisplayName ?? '보카지지';
+
+  const resetToHome = () => {
+    navigation.dispatch(
+      CommonActions.reset({ index: 0, routes: [{ name: '/' }] })
+    );
+  };
+
+  // 뒤로가기: TDS ConfirmDialog → 종료 시 매칭 취소 후 앱 닫기
+  useEffect(() => {
+    const handleBack = async () => {
+      const confirmed = await openConfirm({
+        title: `${josa(brandDisplayName, '을/를')} 종료할까요?`,
+        leftButton: '닫기',
+        rightButton: '종료하기',
+        closeOnDimmerClick: true,
+      });
+      if (confirmed) {
+        cancelRef.current?.();
+        closeView();
+      }
+    };
+
+    backEvent.addEventListener(handleBack);
+    return () => backEvent.removeEventListener(handleBack);
+  }, [backEvent, openConfirm, brandDisplayName]);
   const pulseAnims = [
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
@@ -68,17 +101,12 @@ function MatchingScreen() {
 
   const handleCancel = () => {
     cancelRef.current?.();
-    navigation.goBack();
+    resetToHome();
   };
 
   return (
     <View style={styles.container}>
-      {/* 취소 버튼 */}
-      <View style={styles.topRow}>
-        <TouchableOpacity style={styles.closeBtn} onPress={handleCancel}>
-          <Text style={styles.closeBtnText}>x</Text>
-        </TouchableOpacity>
-      </View>
+      {/* 상단 X 버튼은 GameScreenContainer 오버레이가 제공 — 중복 제거 */}
 
       {/* 메인 영역 */}
       <View style={styles.center}>
@@ -123,26 +151,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 16,
-    paddingTop: 36,
-    paddingBottom: 8,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#22222A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtnText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    fontWeight: '600',
   },
   center: {
     flex: 1,

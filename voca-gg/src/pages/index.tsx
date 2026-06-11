@@ -1,4 +1,4 @@
-import { createRoute } from '@granite-js/react-native';
+import { createRoute, useBackEvent, closeView } from '@granite-js/react-native';
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -8,14 +8,48 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserKeyForGame } from '@apps-in-toss/framework';
+import { useDialog } from '@toss/tds-react-native';
+import { josa } from 'es-hangul';
 import { COLORS } from '../lib/theme';
+import { useAudio, type AudioMode } from '../lib/AudioContext';
 import { formatScore } from '../lib/gameUtils';
 import { initUserStats } from '../lib/matchmaking';
 import type { UserStats } from '../lib/types';
 
-const FALLBACK_UID = 'demo_user_001';
-const FALLBACK_NAME = '플레이어 DEMO';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AppGlobals = Record<string, any>;
+
+// 최초 1회 결정된 UID를 영구 저장 — 이후 세션에서는 캐시 값만 사용
+// (iOS에서 getUserKeyForGame이 세션마다 다른 hash를 반환하는 문제 방지)
+const PERSISTENT_UID_KEY = '@vocagg/persistent_uid';
+
+async function getOrCreatePersistentUid(): Promise<string> {
+  try {
+    const cached = await AsyncStorage.getItem(PERSISTENT_UID_KEY);
+    if (cached) return cached;
+
+    // 최초 1회: getUserKeyForGame 시도 → 실패 시 랜덤 생성
+    let newUid: string;
+    try {
+      const result = await getUserKeyForGame();
+      if (result && result !== 'INVALID_CATEGORY' && result !== 'ERROR' && result.type === 'HASH') {
+        newUid = result.hash;
+      } else {
+        newUid = `${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+      }
+    } catch {
+      newUid = `${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+    }
+
+    await AsyncStorage.setItem(PERSISTENT_UID_KEY, newUid);
+    return newUid;
+  } catch {
+    // AsyncStorage 완전 실패 시 세션 고유 ID (최후 폴백)
+    return `${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+  }
+}
 
 /**
  * getUserKeyForGame의 hash 앞 4자리로 기본 닉네임 생성
@@ -26,33 +60,171 @@ function generateDisplayName(hash: string): string {
   return `플레이어 ${chars || '????'}`;
 }
 
+// ─── 오디오 토글 버튼 ────────────────────────────────────────────────────────
+
+// 음표 + 음파 아이콘 (첨부 이미지 스타일)
+function MusicSoundIcon({ size = 20, color }: { size?: number; color: string }) {
+  const nW = size * 0.52;   // 음표 전체 너비
+  const nH = size;           // 음표 전체 높이
+  const stroke = size * 0.1; // 음파 선 굵기
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', width: size * 1.55, height: nH }}>
+      {/* ── 8분 음표 ── */}
+      <View style={{ width: nW, height: nH }}>
+        {/* 머리 (타원) */}
+        <View style={{
+          position: 'absolute', bottom: 0, left: 0,
+          width: nW * 0.82, height: nH * 0.4,
+          borderRadius: nH * 0.2,
+          backgroundColor: color,
+          transform: [{ rotate: '-14deg' }],
+        }} />
+        {/* 기둥 */}
+        <View style={{
+          position: 'absolute', right: nW * 0.04, bottom: nH * 0.14,
+          width: size * 0.1, height: nH * 0.72,
+          borderRadius: size * 0.05,
+          backgroundColor: color,
+        }} />
+        {/* 꼬리 */}
+        <View style={{
+          position: 'absolute', top: nH * 0.04, right: nW * 0.04,
+          width: nW * 0.52, height: nH * 0.32,
+          backgroundColor: color,
+          borderTopRightRadius: nH * 0.18,
+          borderBottomRightRadius: nH * 0.12,
+        }} />
+      </View>
+
+      {/* ── 음파 (작은 호 → 큰 호) ── */}
+      {/* 호: borderRightColor만 보이는 원 → ")" 형태 */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: size * 0.06, marginLeft: size * 0.04 }}>
+        {/* 작은 호 */}
+        <View style={{
+          width: size * 0.2,
+          height: size * 0.48,
+          borderRadius: size * 0.1,
+          borderWidth: stroke,
+          borderColor: 'transparent',
+          borderRightColor: color,
+        }} />
+        {/* 큰 호 */}
+        <View style={{
+          width: size * 0.26,
+          height: size * 0.72,
+          borderRadius: size * 0.13,
+          borderWidth: stroke,
+          borderColor: 'transparent',
+          borderRightColor: color,
+        }} />
+      </View>
+    </View>
+  );
+}
+
+function AudioToggleButton() {
+  const { mode, cycleMode } = useAudio();
+  const active = mode !== 'off';
+  const iconColor = active ? COLORS.blue : 'rgba(255,255,255,0.3)';
+  const badge = mode === 'bgm1' ? '1' : mode === 'bgm2' ? '2' : null;
+
+  return (
+    <TouchableOpacity
+      style={[audioToggleStyles.btn, active && audioToggleStyles.btnActive]}
+      onPress={cycleMode}
+      activeOpacity={0.75}
+    >
+      <View style={{ position: 'relative' }}>
+        <MusicSoundIcon size={18} color={iconColor} />
+        {/* 꺼짐 상태: 빨간 사선 */}
+        {!active && (
+          <View style={audioToggleStyles.muteLine} />
+        )}
+      </View>
+      {badge && (
+        <Text style={audioToggleStyles.badge}>{badge}</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+const audioToggleStyles = {
+  btn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  btnActive: {
+    borderColor: 'rgba(49,130,246,0.5)',
+    backgroundColor: 'rgba(49,130,246,0.1)',
+  },
+  badge: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: COLORS.blue,
+    marginTop: -1,
+  },
+  muteLine: {
+    position: 'absolute' as const,
+    width: 26,
+    height: 2,
+    backgroundColor: 'rgba(220,50,50,0.9)',
+    top: 7,
+    left: -1,
+    borderRadius: 1,
+    transform: [{ rotate: '-30deg' }],
+  },
+};
+
 export const Route = createRoute('/', {
   component: HomeScreen,
 });
 
 function HomeScreen() {
   const navigation = Route.useNavigation();
-  const [uid, setUid] = useState<string>(FALLBACK_UID);
-  const [displayName, setDisplayName] = useState<string>(FALLBACK_NAME);
+  const [uid, setUid] = useState<string>('');
+  const [displayName, setDisplayName] = useState<string>('');
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const backEvent = useBackEvent();
+  const { openConfirm } = useDialog();
+
+  // 브랜드 이름 (X 버튼 팝업과 동일하게 사용)
+  const brandDisplayName: string =
+    ((global as AppGlobals).__appsInToss ?? {}).brandDisplayName ?? '보카지지';
+
+  // 홈에서 뒤로가기 → TDS ConfirmDialog (X 버튼과 동일한 팝업)
+  useEffect(() => {
+    const handleBack = () => {
+      openConfirm({
+        title: `${josa(brandDisplayName, '을/를')} 종료할까요?`,
+        leftButton: '닫기',
+        rightButton: '종료하기',
+        closeOnDimmerClick: true,
+      }).then((confirmed) => {
+        if (confirmed) closeView();
+      });
+    };
+
+    backEvent.addEventListener(handleBack);
+    return () => backEvent.removeEventListener(handleBack);
+  }, [backEvent, openConfirm, brandDisplayName]);
 
   useEffect(() => {
     async function init() {
       try {
-        let resolvedUid = FALLBACK_UID;
-        let resolvedName = FALLBACK_NAME;
-
-        const result = await getUserKeyForGame();
-        if (
-          result &&
-          result !== 'INVALID_CATEGORY' &&
-          result !== 'ERROR' &&
-          result.type === 'HASH'
-        ) {
-          resolvedUid = result.hash;
-          resolvedName = generateDisplayName(result.hash);
-        }
+        // 최초 1회만 UID 결정 후 AsyncStorage에 영구 저장
+        // 이후 세션에서는 캐시 값 사용 (iOS getUserKeyForGame 세션마다 변경 문제 방지)
+        const resolvedUid = await getOrCreatePersistentUid();
+        const resolvedName = generateDisplayName(resolvedUid);
 
         setUid(resolvedUid);
         setDisplayName(resolvedName);
@@ -86,7 +258,10 @@ function HomeScreen() {
 
       {/* 로고 영역 */}
       <View style={styles.logoArea}>
-        <Text style={styles.tagline}>영어 단어 대결 게임</Text>
+        <View style={styles.taglineRow}>
+          <Text style={styles.tagline}>영어 단어 대결 게임</Text>
+          <AudioToggleButton />
+        </View>
         <Text style={styles.logo}>
           voca<Text style={styles.logoDot}>.</Text>gg
         </Text>
@@ -110,9 +285,13 @@ function HomeScreen() {
               </View>
               <View style={styles.statsDivider} />
               <View style={styles.statsItem}>
-                <Text style={styles.statsItemLabel}>누적 점수</Text>
+                <Text style={styles.statsItemLabel}>평균 점수</Text>
                 <Text style={styles.statsItemValue}>
-                  {formatScore(stats?.totalScore ?? 0)}
+                  {formatScore(
+                    stats && stats.gamesPlayed > 0
+                      ? Math.round(stats.totalScore / stats.gamesPlayed)
+                      : 0
+                  )}
                   <Text style={styles.statsUnit}> P</Text>
                 </Text>
               </View>
@@ -194,7 +373,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 36,
+    paddingTop: 8,  // safeAreaTop은 GameScreenContainer wrapper에서 처리
     paddingBottom: 8,
   },
   avatarRow: {
@@ -226,13 +405,18 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 4,
   },
+  taglineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
   tagline: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.blue,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginBottom: 6,
   },
   logo: {
     fontSize: 52,

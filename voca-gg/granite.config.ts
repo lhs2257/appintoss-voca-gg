@@ -18,6 +18,7 @@ export default defineConfig({
     router(),
     hermes(),
     appsInToss({
+      appType: 'game',
       brand: {
         displayName: '보카지지',
         primaryColor: '#3182F6',

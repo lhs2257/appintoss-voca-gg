@@ -5,8 +5,8 @@
 ```
 [x] 1단계 - 기획    아이디어 확정, 스펙 정의, PROJECT.md 작성
 [x] 2단계 - 설계    화면 와이어프레임, Firebase 구조 확정
-[~] 3단계 - 개발    스캐폴딩 완료 → 단어 DB → 핵심 기능 구현
-[ ] 4단계 - 검증    샌드박스 테스트 → 버그 수정
+[x] 3단계 - 개발    스캐폴딩 완료 → 단어 DB → 핵심 기능 구현
+[~] 4단계 - 검증    샌드박스 테스트 완료 → 버그 수정 완료 → 앱인토스 심사 중
 [ ] 5단계 - 배포    앱인토스 콘솔 출시
 ```
 
@@ -38,7 +38,11 @@
   - 타이머 10초 (TURN_TIMEOUT_MS_CONST = 10000)
   - 랭킹: orderByChild → 클라이언트 정렬 (Firebase 인덱스 불필요)
   - displayName stale 레코드 자동 갱신 (initUserStats)
-- [대기] 샌드박스 재테스트 (전체 플로우 재확인)
+- [완료] 오답 동작 변경: 즉시 종료 → 피드백 후 타이머 계속 진행
+- [완료] 결과 화면 뒤로가기 홈으로 고정 (BackHandler)
+- [완료] 샌드박스 재테스트 통과
+- [완료] GitHub 레포 세팅 (appintoss-voca-gg, main/dev 브랜치, GitHub Pages docs/)
+- [대기] 앱인토스 심사 통과 후 콘솔 약관 URL 변경 (voca-gg-legal → appintoss-voca-gg)
 
 ### 완료: 2단계 설계
 - 화면 와이어프레임 작성 (wireframes.md)
@@ -64,3 +68,5 @@
 | 2026-05-27 | 4단계 검증 | Firebase 빈 배열 오류 수정, validateWord 디버그로 로직 검증 완료 |
 | 2026-05-27 | 4단계 검증 | 봇 모드 분리 리팩토링 - PvP Coming Soon, bestScore 추가, getUserKeyForGame 연동 |
 | 2026-05-27 | 4단계 검증 | UX 버그 7건 수정 - paddingTop, 플레이 횟수 오류, 키보드 ScrollView, 타이머 10초, 랭킹 클라이언트 정렬, displayName 갱신 |
+| 2026-05-27 | 4단계 검증 | 오답 동작 변경(타이머 계속), 결과 화면 뒤로가기 홈으로 고정 |
+| 2026-05-27 | 5단계 배포 | appintoss-voca-gg GitHub 레포 생성, main/dev 브랜치 구성, docs/ 약관 파일 추가 |

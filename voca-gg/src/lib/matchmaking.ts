@@ -275,9 +275,7 @@ export function scheduleBotTurn(
 // ---------------------------------------------------------------------------
 
 /**
- * 점수 랭킹 상위 100명 (봇 모드 누적 점수 기준)
- * orderByChild는 Firebase 인덱스가 없으면 결과가 빈값이 될 수 있어
- * 전체 조회 후 클라이언트에서 정렬
+ * 점수 랭킹 상위 100명 (단판 최고 점수 기준, 0점 제외)
  */
 export async function fetchScoreRanking(): Promise<(UserStats & { uid: string })[]> {
   const snap = await get(ref(db, 'userStats'));
@@ -288,22 +286,7 @@ export async function fetchScoreRanking(): Promise<(UserStats & { uid: string })
     results.push({ uid: child.key!, ...(child.val() as UserStats) });
   });
   return results
-    .sort((a, b) => (b.totalScore ?? 0) - (a.totalScore ?? 0))
-    .slice(0, 100);
-}
-
-/**
- * 단어 수 랭킹 상위 100명
- */
-export async function fetchWordRanking(): Promise<(UserStats & { uid: string })[]> {
-  const snap = await get(ref(db, 'userStats'));
-  if (!snap.exists()) return [];
-
-  const results: (UserStats & { uid: string })[] = [];
-  snap.forEach((child) => {
-    results.push({ uid: child.key!, ...(child.val() as UserStats) });
-  });
-  return results
-    .sort((a, b) => (b.totalWords ?? 0) - (a.totalWords ?? 0))
+    .filter((u) => (u.bestScore ?? 0) > 0)
+    .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0))
     .slice(0, 100);
 }

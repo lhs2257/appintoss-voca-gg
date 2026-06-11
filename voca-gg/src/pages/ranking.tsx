@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 import { COLORS } from '../lib/theme';
 import { formatScore } from '../lib/gameUtils';
-import { fetchScoreRanking, fetchWordRanking } from '../lib/matchmaking';
+import { fetchScoreRanking } from '../lib/matchmaking';
 import type { UserStats } from '../lib/types';
 
-type RankTab = 'score' | 'words';
 type RankedUser = UserStats & { uid: string };
 
 export const Route = createRoute('/ranking', {
@@ -22,26 +21,21 @@ export const Route = createRoute('/ranking', {
 
 function RankingScreen() {
   const navigation = Route.useNavigation();
-  const [tab, setTab] = useState<RankTab>('score');
   const [data, setData] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    const fetcher = tab === 'score' ? fetchScoreRanking : fetchWordRanking;
-    fetcher()
+    fetchScoreRanking()
       .then(setData)
       .catch(() => setData([]))
       .finally(() => setLoading(false));
-  }, [tab]);
+  }, []);
 
   const renderItem = ({ item, index }: { item: RankedUser; index: number }) => {
     const rank = index + 1;
     const isTop3 = rank <= 3;
     const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-    const value = tab === 'score'
-      ? `${formatScore(item.totalScore)} P`
-      : `${formatScore(item.totalWords)} 개`;
+    const value = `${formatScore(item.bestScore ?? 0)} P`;
 
     return (
       <View style={[styles.rankRow, isTop3 && styles.rankRowTop]}>
@@ -78,26 +72,6 @@ function RankingScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* 탭 */}
-      <View style={styles.tabs}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'score' && styles.tabActive]}
-          onPress={() => setTab('score')}
-        >
-          <Text style={[styles.tabText, tab === 'score' && styles.tabTextActive]}>
-            점수 랭킹
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'words' && styles.tabActive]}
-          onPress={() => setTab('words')}
-        >
-          <Text style={[styles.tabText, tab === 'words' && styles.tabTextActive]}>
-            단어 랭킹
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {/* 리스트 */}
       {loading ? (
         <View style={styles.loadingArea}>
@@ -131,7 +105,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 36,
+    paddingTop: 8,  // safeAreaTop은 GameScreenContainer wrapper에서 처리
     paddingBottom: 12,
   },
   backBtn: {
@@ -150,32 +124,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
     letterSpacing: -0.5,
-  },
-  tabs: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    backgroundColor: COLORS.bgCard,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 12,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: COLORS.blue,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   loadingArea: {
     flex: 1,
