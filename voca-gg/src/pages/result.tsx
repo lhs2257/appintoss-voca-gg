@@ -1,12 +1,11 @@
 import { createRoute, useBackEvent, closeView } from '@granite-js/react-native';
 import { CommonActions } from '@react-navigation/native';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDialog } from '@toss/tds-react-native';
 import { josa } from 'es-hangul';
 import { COLORS } from '../lib/theme';
-import { useAudio } from '../lib/AudioContext';
 import { formatScore } from '../lib/gameUtils';
 import { subscribeMatch, getUserStats } from '../lib/matchmaking';
 import type { Match, UserStats } from '../lib/types';
@@ -37,19 +36,6 @@ function ResultScreen() {
 
   const backEvent = useBackEvent();
   const { openConfirm } = useDialog();
-  const { playHighScore } = useAudio();
-  const hasPlayedSfxRef = useRef(false);
-
-  // 최고 기록 갱신 시 SFX 1회 재생 (stats 로드 후 판단)
-  useEffect(() => {
-    if (!stats || hasPlayedSfxRef.current) return;
-    const myScore = match?.scores[uid] ?? 0;
-    const isNewBest = myScore >= (stats.bestScore ?? 0) && myScore > 0;
-    if (isNewBest) {
-      hasPlayedSfxRef.current = true;
-      playHighScore();
-    }
-  }, [stats]);
 
   const brandDisplayName: string =
     ((global as Record<string, any>).__appsInToss ?? {}).brandDisplayName ?? '보카지지';
