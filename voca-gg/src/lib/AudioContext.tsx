@@ -40,6 +40,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [inGame, setInGameState] = useState(false);
   const [playHS, setPlayHS] = useState(false);
   const [ready, setReady] = useState(false);
+  // SFX 종료 후 BGM을 강제 재마운트해 오디오 포커스를 재획득시키기 위한 키
+  const [bgmKey, setBgmKey] = useState(0);
   const modeRef = useRef<AudioMode>('bgm1');
   modeRef.current = mode;
 
@@ -69,32 +71,39 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (modeRef.current !== 'off') setPlayHS(true);
   }, []);
 
-  // onAudioFocusChanged는 Granite Video deadlock 회피용으로 반드시 제공해야 함 (no-op)
-  // 제공 시: paused = !visible || props.paused
+  // SFX 종료 시: SFX 언마운트 + BGM 재마운트(key 변경)로 오디오 포커스 재획득
+  // 모바일 네이티브 오디오 세션은 기본적으로 단일 포커스만 허용하므로 SFX 재생 중
+  // BGM이 중단됨. SFX 종료 후 BGM key를 바꿔 신규 마운트로 포커스를 되돌림.
+  const handleSfxEnd = useCallback(() => {
+    setPlayHS(false);
+    setBgmKey((k) => k + 1);
+  }, []);
+
+  // onAudioFocusChanged는 Granite Video deadlock 회피용으로 반드시 제공 (no-op)
+  // 제공 시: paused = !visible || props.paused (isFocused 조건 비활성화)
   // 미제공 시: paused = !visible || props.paused || (!onAudioFocusChanged && !isFocused)
-  //            → 초기 isFocused=false이므로 항상 paused=true (절대 재생 안 됨)
-  // 상태로 연결하면 SFX가 포커스를 가져갈 때 BGM의 audioFocused=false → BGM 언마운트 버그 발생
+  //            → 초기 isFocused=false이므로 항상 paused=true
   const noop = useCallback((_e: AudioFocusEvent) => {}, []);
 
   return (
     <AudioCtx.Provider value={{ mode, cycleMode, setInGame, playHighScore }}>
       {children}
       {ready && mode === 'bgm1' && !inGame && (
-        <Video source={SRC_MAIN_BGM_1} paused={false} repeat
+        <Video key={bgmKey} source={SRC_MAIN_BGM_1} paused={false} repeat
           onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {ready && mode === 'bgm2' && !inGame && (
-        <Video source={SRC_MAIN_BGM_2} paused={false} repeat
+        <Video key={bgmKey} source={SRC_MAIN_BGM_2} paused={false} repeat
           onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {ready && mode !== 'off' && inGame && (
-        <Video source={SRC_GAME_BGM} paused={false} repeat
+        <Video key={bgmKey} source={SRC_GAME_BGM} paused={false} repeat
           onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {playHS && (
         <Video source={SRC_HIGH_SCORE} paused={false} repeat={false}
           onAudioFocusChanged={noop}
-          onEnd={() => setPlayHS(false)} style={AUDIO_STYLE} />
+          onEnd={handleSfxEnd} style={AUDIO_STYLE} />
       )}
     </AudioCtx.Provider>
   );
