@@ -22,7 +22,6 @@ import {
   submitWord,
   endBotGame,
   scheduleBotTurn,
-  getUserStats,
 } from '../lib/matchmaking';
 import type { Match } from '../lib/types';
 
@@ -64,37 +63,15 @@ function GameScreen() {
 
   const backEvent = useBackEvent();
   const { openConfirm } = useDialog();
-  const { setInGame, playHighScore } = useAudio();
+  const { setInGame } = useAudio();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const brandDisplayName: string = ((global as Record<string, any>).__appsInToss ?? {}).brandDisplayName ?? '보카지지';
-
-  // 이전 최고 기록 (게임 시작 전 로드)
-  const bestScoreRef = useRef<number | null>(null);
-  // 최고 기록 SFX 1회 재생 여부
-  const sfxPlayedRef = useRef(false);
 
   // 게임 화면 진입 시 게임 BGM 활성화, 이탈 시 메인 BGM 복귀
   useEffect(() => {
     setInGame(true);
     return () => setInGame(false);
   }, []);
-
-  // 게임 시작 시 이전 최고 기록 로드
-  useEffect(() => {
-    getUserStats(uid)
-      .then((s) => { bestScoreRef.current = s?.bestScore ?? 0; })
-      .catch(() => { bestScoreRef.current = 0; });
-  }, [uid]);
-
-  // 내 점수가 이전 최고 기록을 최초로 넘는 순간 SFX 재생
-  useEffect(() => {
-    if (sfxPlayedRef.current || bestScoreRef.current === null || !match) return;
-    const myScore = match.scores[uid] ?? 0;
-    if (myScore > 0 && myScore > bestScoreRef.current) {
-      sfxPlayedRef.current = true;
-      playHighScore();
-    }
-  }, [match]);
 
   // 키보드 높이 추적 (KeyboardAvoidingView 대체)
   useEffect(() => {
