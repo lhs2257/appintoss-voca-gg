@@ -5,15 +5,18 @@ import { TDSProvider } from '@toss/tds-react-native';
 import { getSchemeUri } from '@apps-in-toss/native-modules';
 import { context } from '../require.context';
 import GameScreenContainer from './lib/GameScreenContainer';
+import { AudioProvider } from './lib/AudioContext';
 
-/**
- * AppContainer: 앱 전체 루트 컨테이너
- * - TDSProvider: NavigationRightContent(X 버튼) 등 TDS 컴포넌트에 필요한 테마 컨텍스트 제공
- */
+// AppContainer: 앱 전역 루트 — AudioProvider를 여기서 1회만 마운트
+// screenContainer(GameScreenContainer)는 화면마다 별도 인스턴스가 생성되므로
+// AudioProvider를 screenContainer 안에 두면 화면별로 독립적인 상태가 만들어져
+// setInGame/cycleMode 등이 서로 다른 Provider에 적용되는 문제가 발생함
 function AppContainer({ children }: PropsWithChildren<InitialProps>) {
   return (
     <TDSProvider colorPreference="light" token={{ color: { primary: '#3182F6' } }}>
-      {children}
+      <AudioProvider>
+        {children}
+      </AudioProvider>
     </TDSProvider>
   );
 }

@@ -17,7 +17,6 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { AudioProvider } from './AudioContext';
 import { View, Platform, StyleSheet } from 'react-native';
 import {
   PageNavbar,
@@ -204,7 +203,7 @@ export default function GameScreenContainer({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <AudioProvider>
+    <>
       {/* 네이티브 헤더 숨김 */}
       <PageNavbar preference={{ type: 'none' }} />
 
@@ -365,7 +364,7 @@ export default function GameScreenContainer({ children }: PropsWithChildren) {
           </List>
         </BottomSheet.Root>
       )}
-    </AudioProvider>
+    </>
   );
 }
 
