@@ -40,9 +40,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [inGame, setInGameState] = useState(false);
   const [playHS, setPlayHS] = useState(false);
   const [ready, setReady] = useState(false);
-  // Granite Video 래퍼는 onAudioFocusChanged 미제공 시 내부 isFocused=false로 시작하여
-  // paused가 항상 true로 고정됨 (deadlock). audioFocused로 포커스 상태를 직접 관리.
-  const [audioFocused, setAudioFocused] = useState(true);
   const modeRef = useRef<AudioMode>('bgm1');
   modeRef.current = mode;
 
@@ -72,34 +69,31 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (modeRef.current !== 'off') setPlayHS(true);
   }, []);
 
-  // onAudioFocusChanged를 제공해야 Granite Video 래퍼의 deadlock 회피:
-  // - 제공 시: paused = !visible || props.paused (포커스 조건 비활성화 → 즉시 재생)
-  // - 미제공 시: paused = !visible || props.paused || (!onAudioFocusChanged && !isFocused)
-  //              → 초기 isFocused=false이므로 항상 paused=true (절대 재생 안 됨)
-  const handleAudioFocus = useCallback((e: AudioFocusEvent) => {
-    setAudioFocused(e.hasAudioFocus);
-  }, []);
-
-  const canPlay = ready && audioFocused;
+  // onAudioFocusChanged는 Granite Video deadlock 회피용으로 반드시 제공해야 함 (no-op)
+  // 제공 시: paused = !visible || props.paused
+  // 미제공 시: paused = !visible || props.paused || (!onAudioFocusChanged && !isFocused)
+  //            → 초기 isFocused=false이므로 항상 paused=true (절대 재생 안 됨)
+  // 상태로 연결하면 SFX가 포커스를 가져갈 때 BGM의 audioFocused=false → BGM 언마운트 버그 발생
+  const noop = useCallback((_e: AudioFocusEvent) => {}, []);
 
   return (
     <AudioCtx.Provider value={{ mode, cycleMode, setInGame, playHighScore }}>
       {children}
-      {canPlay && mode === 'bgm1' && !inGame && (
+      {ready && mode === 'bgm1' && !inGame && (
         <Video source={SRC_MAIN_BGM_1} paused={false} repeat
-          onAudioFocusChanged={handleAudioFocus} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
-      {canPlay && mode === 'bgm2' && !inGame && (
+      {ready && mode === 'bgm2' && !inGame && (
         <Video source={SRC_MAIN_BGM_2} paused={false} repeat
-          onAudioFocusChanged={handleAudioFocus} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
-      {canPlay && mode !== 'off' && inGame && (
+      {ready && mode !== 'off' && inGame && (
         <Video source={SRC_GAME_BGM} paused={false} repeat
-          onAudioFocusChanged={handleAudioFocus} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {playHS && (
         <Video source={SRC_HIGH_SCORE} paused={false} repeat={false}
-          onAudioFocusChanged={handleAudioFocus}
+          onAudioFocusChanged={noop}
           onEnd={() => setPlayHS(false)} style={AUDIO_STYLE} />
       )}
     </AudioCtx.Provider>
