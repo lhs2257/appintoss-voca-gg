@@ -354,14 +354,6 @@ function HomeScreen() {
           </View>
         </View>
 
-        {/* 랭킹 */}
-        <TouchableOpacity
-          style={styles.btnRanking}
-          onPress={() => navigation.navigate('/ranking')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.btnRankingText}>랭킹 보기</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
     <BottomNav active="/" navigation={navigation} />
@@ -568,19 +560,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.textMuted,
-  },
-  btnRanking: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: COLORS.bgCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  btnRankingText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
   },
 });
