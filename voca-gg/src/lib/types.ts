@@ -45,6 +45,7 @@ export interface Match {
 
 export interface UserStats {
   displayName: string;
+  color?: string;
   totalScore: number;
   bestScore: number;   // 단판 최고 점수
   totalWords: number;

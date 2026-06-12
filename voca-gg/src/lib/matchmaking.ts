@@ -70,6 +70,64 @@ export async function getUserStats(uid: string): Promise<UserStats | null> {
 }
 
 // ---------------------------------------------------------------------------
+// 프로필 관리
+// ---------------------------------------------------------------------------
+
+/**
+ * 닉네임 사용 가능 여부 확인 (nicknames/{lower} 인덱스 기준)
+ * - 미등록: 사용 가능
+ * - 등록됨 + 본인 uid: 사용 가능 (현재 닉네임 유지)
+ * - 등록됨 + 타인 uid: 사용 불가
+ */
+export async function checkNicknameAvailable(nickname: string, currentUid: string): Promise<boolean> {
+  const key = nickname.trim().toLowerCase();
+  const snap = await get(ref(db, `nicknames/${key}`));
+  if (!snap.exists()) return true;
+  return snap.val() === currentUid;
+}
+
+/**
+ * 프로필 저장 (닉네임 + 색상)
+ * - userStats/{uid} 업데이트
+ * - nicknames 인덱스 원자적 갱신 (이전 닉네임 제거, 새 닉네임 등록)
+ */
+export async function saveProfile(
+  uid: string,
+  nickname: string,
+  color: string,
+  oldNickname?: string,
+): Promise<void> {
+  const newKey = nickname.trim().toLowerCase();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updates: Record<string, any> = {};
+
+  if (oldNickname) {
+    const oldKey = oldNickname.trim().toLowerCase();
+    if (oldKey !== newKey) {
+      updates[`nicknames/${oldKey}`] = null;
+    }
+  }
+
+  updates[`nicknames/${newKey}`] = uid;
+  updates[`userStats/${uid}/displayName`] = nickname;
+  updates[`userStats/${uid}/color`] = color;
+  updates[`userStats/${uid}/updatedAt`] = Date.now();
+
+  await update(ref(db), updates);
+}
+
+/**
+ * 신규 유저 닉네임 인덱스 초기화 (initUserStats 이후 1회 호출)
+ */
+export async function ensureNicknameIndex(uid: string, displayName: string): Promise<void> {
+  const key = displayName.trim().toLowerCase();
+  const snap = await get(ref(db, `nicknames/${key}`));
+  if (!snap.exists()) {
+    await set(ref(db, `nicknames/${key}`), uid);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 봇 매치 생성
 // ---------------------------------------------------------------------------
 

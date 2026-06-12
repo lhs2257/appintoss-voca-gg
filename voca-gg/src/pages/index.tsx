@@ -11,10 +11,13 @@ import {
 import { getUserKeyForGame, Storage } from '@apps-in-toss/framework';
 import { useDialog } from '@toss/tds-react-native';
 import { josa } from 'es-hangul';
-import { COLORS } from '../lib/theme';
+import { COLORS, BOTTOM_NAV_HEIGHT } from '../lib/theme';
 import { useAudio, type AudioMode } from '../lib/AudioContext';
 import { formatScore } from '../lib/gameUtils';
-import { initUserStats } from '../lib/matchmaking';
+import { initUserStats, ensureNicknameIndex } from '../lib/matchmaking';
+import { useProfile } from '../lib/ProfileContext';
+import { Avatar } from '../components/Avatar';
+import { BottomNav } from '../components/BottomNav';
 import type { UserStats } from '../lib/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,8 +191,8 @@ export const Route = createRoute('/', {
 
 function HomeScreen() {
   const navigation = Route.useNavigation();
+  const { initProfile, nickname, color } = useProfile();
   const [uid, setUid] = useState<string>('');
-  const [displayName, setDisplayName] = useState<string>('');
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -220,16 +223,19 @@ function HomeScreen() {
   useEffect(() => {
     async function init() {
       try {
-        // 최초 1회만 UID 결정 후 Storage에 영구 저장
-        // 이후 세션에서는 캐시 값 사용 (iOS getUserKeyForGame 세션마다 변경 문제 방지)
         const resolvedUid = await getOrCreatePersistentUid();
         const resolvedName = generateDisplayName(resolvedUid);
 
         setUid(resolvedUid);
-        setDisplayName(resolvedName);
 
         const userStats = await initUserStats(resolvedUid, resolvedName);
         setStats(userStats);
+
+        // 닉네임 인덱스 초기화 (최초 진입 시 미등록 상태 해소)
+        await ensureNicknameIndex(resolvedUid, userStats.displayName);
+
+        // ProfileContext 초기화 (전역 닉네임/색상 상태 반영)
+        initProfile(resolvedUid, userStats);
       } catch {
         setStats(null);
       } finally {
@@ -237,22 +243,25 @@ function HomeScreen() {
       }
     }
     init();
-  }, []);
+  }, [initProfile]);
 
   return (
+    <View style={{ flex: 1, backgroundColor: COLORS.bg }}>
     <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: BOTTOM_NAV_HEIGHT + 16 }]}
       showsVerticalScrollIndicator={false}
     >
       {/* 상단 바 */}
       <View style={styles.topBar}>
-        <View style={styles.avatarRow}>
-          <View style={styles.avatarBox}>
-            <View style={styles.avatarInner} />
-          </View>
-          <Text style={styles.userName}>{displayName} 님</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.avatarRow}
+          onPress={() => navigation.navigate('/profile')}
+          activeOpacity={0.75}
+        >
+          <Avatar name={nickname} color={color} size={32} />
+          <Text style={styles.userName}>{nickname} 님</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 로고 영역 */}
@@ -316,7 +325,7 @@ function HomeScreen() {
         <TouchableOpacity
           style={styles.btnBotMode}
           onPress={() =>
-            navigation.navigate('/matching', { uid, displayName })
+            navigation.navigate('/matching', { uid, displayName: nickname })
           }
           activeOpacity={0.85}
           disabled={loading}
@@ -355,6 +364,8 @@ function HomeScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    <BottomNav active="/" navigation={navigation} />
+    </View>
   );
 }
 
@@ -379,20 +390,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  avatarBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#22222A',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInner: {
-    width: 16,
-    height: 16,
-    borderRadius: 5,
-    backgroundColor: COLORS.blue,
   },
   userName: {
     fontSize: 14,

@@ -6,17 +6,19 @@ import { getSchemeUri } from '@apps-in-toss/native-modules';
 import { context } from '../require.context';
 import GameScreenContainer from './lib/GameScreenContainer';
 import { AudioProvider } from './lib/AudioContext';
+import { ProfileProvider } from './lib/ProfileContext';
 
-// AppContainer: 앱 전역 루트 — AudioProvider를 여기서 1회만 마운트
-// screenContainer(GameScreenContainer)는 화면마다 별도 인스턴스가 생성되므로
-// AudioProvider를 screenContainer 안에 두면 화면별로 독립적인 상태가 만들어져
-// setInGame/cycleMode 등이 서로 다른 Provider에 적용되는 문제가 발생함
+// AppContainer: 앱 전역 루트
+// ProfileProvider, AudioProvider를 여기서 1회만 마운트
+// screenContainer(GameScreenContainer)에 두면 화면별로 독립 인스턴스가 생성되는 문제 방지
 function AppContainer({ children }: PropsWithChildren<InitialProps>) {
   return (
     <TDSProvider colorPreference="light" token={{ color: { primary: '#3182F6' } }}>
-      <AudioProvider>
-        {children}
-      </AudioProvider>
+      <ProfileProvider>
+        <AudioProvider>
+          {children}
+        </AudioProvider>
+      </ProfileProvider>
     </TDSProvider>
   );
 }

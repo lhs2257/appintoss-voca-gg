@@ -3,14 +3,15 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../lib/theme';
+import { COLORS, DEFAULT_AVATAR_COLOR, BOTTOM_NAV_HEIGHT } from '../lib/theme';
 import { formatScore } from '../lib/gameUtils';
 import { fetchScoreRanking } from '../lib/matchmaking';
+import { Avatar } from '../components/Avatar';
+import { BottomNav } from '../components/BottomNav';
 import type { UserStats } from '../lib/types';
 
 type RankedUser = UserStats & { uid: string };
@@ -48,6 +49,11 @@ function RankingScreen() {
             <Text style={styles.rankText}>{rank}</Text>
           )}
         </View>
+        <Avatar
+          name={item.displayName}
+          color={item.color ?? DEFAULT_AVATAR_COLOR}
+          size={34}
+        />
         <View style={styles.rankInfo}>
           <Text style={styles.rankName}>{item.displayName}</Text>
           <Text style={styles.rankSub}>
@@ -65,11 +71,7 @@ function RankingScreen() {
     <View style={styles.container}>
       {/* 헤더 */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>←</Text>
-        </TouchableOpacity>
         <Text style={styles.title}>랭킹</Text>
-        <View style={{ width: 40 }} />
       </View>
 
       {/* 리스트 */}
@@ -87,10 +89,11 @@ function RankingScreen() {
           data={data}
           renderItem={renderItem}
           keyExtractor={(item) => item.uid}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: BOTTOM_NAV_HEIGHT + 8 }]}
           showsVerticalScrollIndicator={false}
         />
       )}
+      <BottomNav active="/ranking" navigation={navigation} />
     </View>
   );
 }
@@ -103,21 +106,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,  // safeAreaTop은 GameScreenContainer wrapper에서 처리
+    paddingHorizontal: 20,
+    paddingTop: 8,
     paddingBottom: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnText: {
-    fontSize: 22,
-    color: COLORS.text,
-    fontWeight: '600',
   },
   title: {
     fontSize: 18,
@@ -154,7 +145,8 @@ const styles = StyleSheet.create({
   rankRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    gap: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: COLORS.bgCard,
     borderRadius: 12,
@@ -180,7 +172,6 @@ const styles = StyleSheet.create({
   },
   rankInfo: {
     flex: 1,
-    marginLeft: 10,
   },
   rankName: {
     fontSize: 15,

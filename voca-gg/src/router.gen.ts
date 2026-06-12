@@ -3,6 +3,8 @@
 import { Route as _GameRoute } from '../pages/game';
 import { Route as _IndexRoute } from '../pages/';
 import { Route as _MatchingRoute } from '../pages/matching';
+import { Route as _ProfileRoute } from '../pages/profile';
+import { Route as _ProfileEditRoute } from '../pages/profile-edit';
 import { Route as _RankingRoute } from '../pages/ranking';
 import { Route as _ResultRoute } from '../pages/result';
 
@@ -11,6 +13,8 @@ declare module '@granite-js/react-native' {
     '/game': (typeof _GameRoute)['_inputType'];
     '/': (typeof _IndexRoute)['_inputType'];
     '/matching': (typeof _MatchingRoute)['_inputType'];
+    '/profile': (typeof _ProfileRoute)['_inputType'];
+    '/profile-edit': (typeof _ProfileEditRoute)['_inputType'];
     '/ranking': (typeof _RankingRoute)['_inputType'];
     '/result': (typeof _ResultRoute)['_inputType'];
   }
@@ -19,6 +23,8 @@ declare module '@granite-js/react-native' {
     '/game': (typeof _GameRoute)['_outputType'];
     '/': (typeof _IndexRoute)['_outputType'];
     '/matching': (typeof _MatchingRoute)['_outputType'];
+    '/profile': (typeof _ProfileRoute)['_outputType'];
+    '/profile-edit': (typeof _ProfileEditRoute)['_outputType'];
     '/ranking': (typeof _RankingRoute)['_outputType'];
     '/result': (typeof _ResultRoute)['_outputType'];
   }
