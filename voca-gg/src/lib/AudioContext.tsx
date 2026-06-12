@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { Video, type VideoProps } from '@granite-js/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Storage } from '@apps-in-toss/framework';
 
 type AudioFocusEvent = Parameters<NonNullable<VideoProps['onAudioFocusChanged']>>[0];
 
@@ -37,7 +37,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(AUDIO_MODE_KEY)
+    Storage.getItem(AUDIO_MODE_KEY)
       .then((v) => {
         if (v === 'bgm1' || v === 'bgm2' || v === 'off') {
           setMode(v as AudioMode);
@@ -51,7 +51,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setMode((prev) => {
       const next: AudioMode =
         prev === 'bgm1' ? 'bgm2' : prev === 'bgm2' ? 'off' : 'bgm1';
-      AsyncStorage.setItem(AUDIO_MODE_KEY, next).catch(() => {});
+      Storage.setItem(AUDIO_MODE_KEY, next).catch(() => {});
       return next;
     });
   }, []);
