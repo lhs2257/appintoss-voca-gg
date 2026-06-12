@@ -16,7 +16,7 @@ const AUDIO_MODE_KEY = '@vocagg/audio_mode';
 
 // GitHub Releases URL은 Content-Disposition: attachment로 인해 iOS AVFoundation에서 재생 불가
 // raw.githubusercontent.com은 redirect 없이 직접 파일 제공
-const BASE = 'https://raw.githubusercontent.com/lhs2257/appintoss-voca-gg/main/audio';
+const BASE = 'https://raw.githubusercontent.com/lhs2257/appintoss-voca-gg/main/voca-gg/audio';
 const SRC_MAIN_BGM_1 = { uri: `${BASE}/main_BGM_1.mp3` };
 const SRC_MAIN_BGM_2 = { uri: `${BASE}/main_BGM_2.mp3` };
 const SRC_GAME_BGM   = { uri: `${BASE}/game_BGM.mp3` };
