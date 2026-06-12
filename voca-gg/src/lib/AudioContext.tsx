@@ -62,26 +62,21 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   // onAudioFocusChanged는 Granite Video deadlock 회피용으로 반드시 제공 (no-op)
   const noop = useCallback((_e: AudioFocusEvent) => {}, []);
-  const onErr = useCallback((e: any) => {
-    console.warn('[AudioContext] Video onError', JSON.stringify(e?.error ?? e));
-  }, []);
-
-  console.log('[AudioContext] render — ready:', ready, 'mode:', mode, 'inGame:', inGame);
 
   return (
     <AudioCtx.Provider value={{ mode, cycleMode, setInGame }}>
       {children}
       {ready && mode === 'bgm1' && !inGame && (
         <Video source={SRC_MAIN_BGM_1} paused={false} repeat
-          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {ready && mode === 'bgm2' && !inGame && (
         <Video source={SRC_MAIN_BGM_2} paused={false} repeat
-          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
       {ready && mode !== 'off' && inGame && (
         <Video source={SRC_GAME_BGM} paused={false} repeat
-          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
       )}
     </AudioCtx.Provider>
   );
