@@ -14,7 +14,9 @@ export type AudioMode = 'bgm1' | 'bgm2' | 'off';
 
 const AUDIO_MODE_KEY = '@vocagg/audio_mode';
 
-const BASE = 'https://github.com/lhs2257/appintoss-voca-gg/releases/download/audio-assets';
+// GitHub Releases URL은 Content-Disposition: attachment로 인해 iOS AVFoundation에서 재생 불가
+// raw.githubusercontent.com은 redirect 없이 직접 파일 제공
+const BASE = 'https://raw.githubusercontent.com/lhs2257/appintoss-voca-gg/main/audio';
 const SRC_MAIN_BGM_1 = { uri: `${BASE}/main_BGM_1.mp3` };
 const SRC_MAIN_BGM_2 = { uri: `${BASE}/main_BGM_2.mp3` };
 const SRC_GAME_BGM   = { uri: `${BASE}/game_BGM.mp3` };
@@ -43,8 +45,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           setMode(v as AudioMode);
         }
       })
-      .catch(() => {});
-    setReady(true);
+      .catch(() => {})
+      .finally(() => setReady(true));
   }, []);
 
   const cycleMode = useCallback(() => {
@@ -59,25 +61,27 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const setInGame = useCallback((v: boolean) => setInGameState(v), []);
 
   // onAudioFocusChanged는 Granite Video deadlock 회피용으로 반드시 제공 (no-op)
-  // 제공 시: paused = !visible || props.paused (isFocused 조건 비활성화)
-  // 미제공 시: paused = !visible || props.paused || (!onAudioFocusChanged && !isFocused)
-  //            → 초기 isFocused=false이므로 항상 paused=true
   const noop = useCallback((_e: AudioFocusEvent) => {}, []);
+  const onErr = useCallback((e: any) => {
+    console.warn('[AudioContext] Video onError', JSON.stringify(e?.error ?? e));
+  }, []);
+
+  console.log('[AudioContext] render — ready:', ready, 'mode:', mode, 'inGame:', inGame);
 
   return (
     <AudioCtx.Provider value={{ mode, cycleMode, setInGame }}>
       {children}
       {ready && mode === 'bgm1' && !inGame && (
         <Video source={SRC_MAIN_BGM_1} paused={false} repeat
-          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
       )}
       {ready && mode === 'bgm2' && !inGame && (
         <Video source={SRC_MAIN_BGM_2} paused={false} repeat
-          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
       )}
       {ready && mode !== 'off' && inGame && (
         <Video source={SRC_GAME_BGM} paused={false} repeat
-          onAudioFocusChanged={noop} style={AUDIO_STYLE} />
+          onAudioFocusChanged={noop} onError={onErr} style={AUDIO_STYLE} />
       )}
     </AudioCtx.Provider>
   );
