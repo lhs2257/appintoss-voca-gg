@@ -8,8 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUserKeyForGame } from '@apps-in-toss/framework';
+import { getUserKeyForGame, Storage } from '@apps-in-toss/framework';
 import { useDialog } from '@toss/tds-react-native';
 import { josa } from 'es-hangul';
 import { COLORS } from '../lib/theme';
@@ -27,7 +26,7 @@ const PERSISTENT_UID_KEY = '@vocagg/persistent_uid';
 
 async function getOrCreatePersistentUid(): Promise<string> {
   try {
-    const cached = await AsyncStorage.getItem(PERSISTENT_UID_KEY);
+    const cached = await Storage.getItem(PERSISTENT_UID_KEY);
     if (cached) return cached;
 
     // 최초 1회: getUserKeyForGame 시도 → 실패 시 랜덤 생성
@@ -43,10 +42,10 @@ async function getOrCreatePersistentUid(): Promise<string> {
       newUid = `${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
     }
 
-    await AsyncStorage.setItem(PERSISTENT_UID_KEY, newUid);
+    await Storage.setItem(PERSISTENT_UID_KEY, newUid);
     return newUid;
   } catch {
-    // AsyncStorage 완전 실패 시 세션 고유 ID (최후 폴백)
+    // Storage 완전 실패 시 세션 고유 ID (최후 폴백)
     return `${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
   }
 }
@@ -221,7 +220,7 @@ function HomeScreen() {
   useEffect(() => {
     async function init() {
       try {
-        // 최초 1회만 UID 결정 후 AsyncStorage에 영구 저장
+        // 최초 1회만 UID 결정 후 Storage에 영구 저장
         // 이후 세션에서는 캐시 값 사용 (iOS getUserKeyForGame 세션마다 변경 문제 방지)
         const resolvedUid = await getOrCreatePersistentUid();
         const resolvedName = generateDisplayName(resolvedUid);
