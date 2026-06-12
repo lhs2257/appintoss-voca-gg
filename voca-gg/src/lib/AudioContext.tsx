@@ -89,7 +89,9 @@ export function useAudio() {
 
 const AUDIO_STYLE = {
   position: 'absolute' as const,
-  width: 0,
-  height: 0,
+  width: 1,
+  height: 1,
   opacity: 0,
+  top: -10,
+  left: -10,
 };
